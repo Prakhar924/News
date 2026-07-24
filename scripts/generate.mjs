@@ -94,14 +94,14 @@ if(!items.length){
 writeFileSync("news.json", JSON.stringify(items.slice(0, 150)));
 console.log(`news.json written: ${items.length} stories`);
 
-/* ---------- ask Claude for an original briefing ---------- */
-const API_KEY = process.env.ANTHROPIC_API_KEY;
+/* ---------- ask GPT for an original briefing ---------- */
+const API_KEY = process.env.OPENAI_API_KEY;
 if(process.env.GENERATE_BRIEFING === "false"){
   console.log("Hourly news-only run — skipping briefing generation.");
   process.exit(0);
 }
 if(!API_KEY){
-  console.warn("No ANTHROPIC_API_KEY set — skipping briefing generation.");
+  console.warn("No OPENAI_API_KEY set — skipping briefing generation.");
   process.exit(0);
 }
 
@@ -138,22 +138,22 @@ Headlines digest:
 ${digest}`;
 
 try{
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
+  const res = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "x-api-key": API_KEY,
-      "anthropic-version": "2023-06-01",
+      "Authorization": "Bearer " + API_KEY,
     },
     body: JSON.stringify({
-      model: "claude-haiku-4-5-20251001",
+      model: "gpt-4o-mini",
       max_tokens: 1500,
+      response_format: {type: "json_object"},
       messages: [{role: "user", content: prompt}],
     }),
   });
   if(!res.ok) throw new Error("API " + res.status + ": " + await res.text());
   const data = await res.json();
-  const text = (data.content || []).filter(b => b.type === "text").map(b => b.text).join("");
+  const text = data.choices?.[0]?.message?.content || "";
   const clean = text.replace(/```json|```/g, "").trim();
   const briefing = JSON.parse(clean);
 
