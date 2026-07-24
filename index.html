@@ -34,6 +34,7 @@ body{
 }
 a{color:inherit;text-decoration:none}
 img{display:block;max-width:100%}
+[hidden]{display:none!important}
 
 /* ---------- Masthead ---------- */
 .masthead{
@@ -84,14 +85,6 @@ img{display:block;max-width:100%}
   70%{box-shadow:0 0 0 9px rgba(31,138,93,0)}
   100%{box-shadow:0 0 0 0 rgba(31,138,93,0)}
 }
-.refresh-ring{position:relative;width:34px;height:34px;flex-shrink:0}
-.refresh-ring svg{transform:rotate(-90deg)}
-.refresh-ring .track{stroke:var(--hairline);fill:none;stroke-width:3}
-.refresh-ring .bar{stroke:var(--saffron);fill:none;stroke-width:3;stroke-linecap:round;transition:stroke-dashoffset 1s linear}
-.refresh-ring .num{
-  position:absolute;inset:0;display:grid;place-items:center;
-  font-size:10px;color:var(--paper);
-}
 #clock{color:var(--paper)}
 
 /* ---------- Breaking river ---------- */
@@ -117,7 +110,7 @@ img{display:block;max-width:100%}
 @keyframes flash{to{visibility:hidden}}
 .river-track{
   display:flex;width:max-content;
-  animation:flow 32s linear infinite;
+  animation:flow 45s linear infinite;
   padding:10px 0;
 }
 .river:hover .river-track{animation-play-state:paused}
@@ -317,14 +310,6 @@ footer b{color:var(--paper);font-weight:500}
     <div class="masthead-meta">
       <span id="clock">--:--:--</span>
       <span class="live-pill"><span class="live-dot"></span>LIVE</span>
-      <div class="refresh-ring" title="Auto-refresh countdown">
-        <svg width="34" height="34" viewBox="0 0 34 34">
-          <circle class="track" cx="17" cy="17" r="14"></circle>
-          <circle class="bar" id="ringBar" cx="17" cy="17" r="14"
-            stroke-dasharray="87.96" stroke-dashoffset="0"></circle>
-        </svg>
-        <span class="num" id="ringNum">60</span>
-      </div>
     </div>
   </div>
   <nav class="catnav" id="catnav"></nav>
@@ -508,27 +493,72 @@ function upscale(url){
 }
 
 /* ---------- refresh cycle ---------- */
+function applyPool(pool){
+  // merge fresh items with what's already on screen, newest first
+  const seen = new Set();
+  const cutoff = Date.now() - 48*3600*1000;
+  allItems = [...pool, ...allItems].filter(x => {
+    const k = x.title.toLowerCase();
+    if(seen.has(k) || x.date < cutoff) return false;
+    seen.add(k); return true;
+  }).sort((a,b) => b.date - a.date).slice(0, 220);
+}
+
+let renderQueued = false;
+function queueRender(){
+  if(renderQueued) return;
+  renderQueued = true;
+  setTimeout(() => { renderQueued = false; render(); }, 400);
+}
+
+/* cache: instantly show last session's stories while fresh ones load
+   (guarded — silently skipped if storage is unavailable) */
+function loadCache(){
+  try{
+    const raw = localStorage.getItem("bw-cache");
+    if(!raw) return;
+    const arr = JSON.parse(raw);
+    if(Array.isArray(arr) && arr.length){
+      allItems = arr.map(x => ({...x, date:new Date(x.date)}));
+      applyPool([]);
+      render();
+      setStatus("● Showing recent stories — updating live…");
+    }
+  }catch(e){}
+}
+function saveCache(){
+  try{
+    localStorage.setItem("bw-cache", JSON.stringify(allItems.slice(0,120)));
+  }catch(e){}
+}
+
 async function refreshAll(){
-  setStatus("⟳ Fetching live feeds…");
-  const results = await Promise.all(FEEDS.map(fetchFeed));
-  const merged = results.flat();
+  if(!allItems.length) setStatus("⟳ Fetching live feeds…");
+  let gotAny = false;
 
-  if(merged.length){
-    // de-duplicate by title
-    const seen = new Set();
-    allItems = merged.filter(x => {
-      const k = x.title.toLowerCase();
-      if(seen.has(k)) return false;
-      seen.add(k); return true;
-    }).sort((a,b) => b.date - a.date);
+  // render as each source responds — no waiting for the slowest feed
+  const tasks = FEEDS.map(feed =>
+    fetchFeed(feed).then(items => {
+      if(items.length){
+        gotAny = true;
+        applyPool(items);
+        queueRender();
+      }
+    })
+  );
+  await Promise.allSettled(tasks);
 
+  if(gotAny){
     render();
+    saveCache();
     const now = new Date();
     setStatus(`<span class="ok">●</span> ${allItems.length} stories live`,
               `Updated ${now.toLocaleTimeString('en-IN',{hour12:true})}`,
               `Sources: TOI · HT · NDTV`);
     if(!firstLoad) toast();
     firstLoad = false;
+  }else if(allItems.length){
+    setStatus("● Showing last loaded stories — feeds unreachable right now, retrying in 60s.");
   }else{
     setStatus("⚠ Could not reach any feed — retrying in 60s.",
       "If you're viewing this in a preview/sandbox, open the file directly in your browser or deploy it — previews block outside requests.",
@@ -660,19 +690,16 @@ function timeAgo(d){
   return Math.floor(h/24) + "d ago";
 }
 
-/* ---------- clock + countdown ring ---------- */
-const RING_LEN = 2 * Math.PI * 14;
+/* ---------- clock + silent auto-refresh ---------- */
 setInterval(() => {
   document.getElementById("clock").textContent =
     new Date().toLocaleTimeString("en-IN", {hour12:false});
 
   countdown--;
-  if(countdown <= 0){ refreshAll(); return; }
-  document.getElementById("ringNum").textContent = countdown;
-  document.getElementById("ringBar").style.strokeDashoffset =
-    RING_LEN * (1 - countdown / REFRESH_SECONDS);
+  if(countdown <= 0) refreshAll();
 }, 1000);
 
+loadCache();
 refreshAll();
 </script>
 </body>
