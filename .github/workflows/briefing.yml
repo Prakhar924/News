@@ -24,7 +24,7 @@ jobs:
       - name: Generate news.json (+ briefing on edition runs)
         run: node scripts/generate.mjs
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           # briefing only on the three edition crons or manual runs; hourly runs just refresh news
           GENERATE_BRIEFING: ${{ (github.event_name == 'workflow_dispatch' || contains(fromJSON('["0 1 * * *","30 7 * * *","30 12 * * *"]'), github.event.schedule)) && 'true' || 'false' }}
 
