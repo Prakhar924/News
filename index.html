@@ -378,9 +378,11 @@ const FEEDS = [
   {cat:"Entertainment", url:"https://timesofindia.indiatimes.com/rssfeeds/1081479906.cms", src:"Times of India"},
   {cat:"World",         url:"https://timesofindia.indiatimes.com/rssfeeds/296589292.cms", src:"Times of India"},
   {cat:"Top Stories",   url:"https://feeds.feedburner.com/ndtvnews-top-stories", src:"NDTV"},
+  {cat:"Horoscope",     url:"https://www.hindustantimes.com/feeds/rss/astrology/horoscope/rssfeed.xml", src:"Hindustan Times"},
+  {cat:"Horoscope",     url:"https://www.hindustantimes.com/feeds/rss/astrology/rssfeed.xml", src:"Hindustan Times"},
 ];
 
-const CATEGORIES = ["All","Top Stories","India","Business","Technology","Sports","Entertainment","World"];
+const CATEGORIES = ["All","Top Stories","India","Business","Technology","Sports","Entertainment","World","Horoscope"];
 
 /* XML pass-through proxies, tried in order */
 const PROXIES = [
@@ -652,7 +654,6 @@ function renderSections(){
       <section>
         <div class="section-head">
           <h2>${cat}</h2>
-          <span class="count">${list.length} stories</span>
         </div>
         <div class="grid">
           ${list.map(card).join("")}
