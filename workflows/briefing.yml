@@ -1,0 +1,38 @@
+name: Generate BharatWire briefing
+
+on:
+  schedule:
+    - cron: "15 * * * *"   # every hour: refresh news.json snapshot (no AI call)
+    - cron: "0 1 * * *"    # 6:30 AM IST — Morning Edition briefing
+    - cron: "30 7 * * *"   # 1:00 PM IST — Midday Edition briefing
+    - cron: "30 12 * * *"  # 6:00 PM IST — Evening Edition briefing
+  workflow_dispatch:        # manual "Run workflow" button (generates briefing too)
+
+permissions:
+  contents: write
+
+jobs:
+  briefing:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Generate news.json (+ briefing on edition runs)
+        run: node scripts/generate.mjs
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          # briefing only on the three edition crons or manual runs; hourly runs just refresh news
+          GENERATE_BRIEFING: ${{ (github.event_name == 'workflow_dispatch' || contains(fromJSON('["0 1 * * *","30 7 * * *","30 12 * * *"]'), github.event.schedule)) && 'true' || 'false' }}
+
+      - name: Commit and push
+        run: |
+          git config user.name "bharatwire-bot"
+          git config user.email "bharatwire-bot@users.noreply.github.com"
+          git pull --rebase
+          git add -A news.json briefing.json
+          git diff --staged --quiet || git commit -m "Update $(date -u '+%Y-%m-%d %H:%M UTC')"
+          git push
